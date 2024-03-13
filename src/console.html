@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Консоль управления</title>
+    <style>
+        body {
+            width: 1200px;
+            margin: 0 auto;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .forms {
+            display: flex;
+            gap: 200px;
+        }
+
+        .listForm {
+            width: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .addCityForm {
+            width: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .listItem {
+            border: 1px solid black;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #allLists {
+            width: 300px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <h1>Списки</h1>
+
+    <div class="forms">
+        <div>
+            <h2>Добавить новый список</h2>
+            <form class="listForm" onsubmit="addList(event)">
+                <label for="fullName">
+                    Full Name: <input type="text" id="fullName" placeholder="Full name" required>
+                </label>
+                <label for="shortName">
+                    Short Name: <input type="text" id="shortName" placeholder="Short name" required>
+                </label>
+                <label for="color">
+                    Color: <input type="color" id="color" required>
+                </label>
+                <button type="submit">Добавить</button>
+            </form>
+        </div>
+        <div>
+            <h2>Добавить новый город</h2>
+            <form id="addCityForm" class="addCityForm" onsubmit="addCityToList(event)">
+                <label for="cityName">City Name: <input type="text" id="cityName" required></label>
+                <label for="cityDescription">City Description: <input type="text" id="cityDescription" required></label>
+                <button type="submit">Добавить город</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <div>
+            <h2>Список</h2>
+            <div id="allLists"></div>
+        </div>
+        <div>
+            <h2>Все города</h2>
+            <div id="citiesContainer"></div>
+        </div>
+    </div>
+</div>
+
+<div id="Modal" class="modal">
+    <div class="modal-content">
+        <form id="editForm" onsubmit="updateList(event)">
+            <label for="editFullName">
+                Full Name: <input type="text" id="editFullName" required>
+            </label>
+            <label for="editShortName">
+                Short Name: <input type="text" id="editShortName" required>
+            </label>
+            <label for="editColor">
+                Color: <input type="color" id="editColor" required>
+            </label>
+            <button type="submit">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    let selectedListId = null;
+
+    async function getLists() {
+        const response = await fetch('/list', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        return await response.json();
+    }
+
+    async function renderLists() {
+        const lists = await getLists();
+        const allLists = document.getElementById('allLists');
+
+        allLists.innerHTML = '';
+
+        lists.forEach(list => {
+            const listItem = document.createElement('div');
+            listItem.classList.add('listItem');
+            listItem.dataset.id = list._id;
+
+            const id = document.createElement('p');
+            id.textContent = `ID: ${list._id}`;
+            listItem.appendChild(id);
+
+            const fullName = document.createElement('p');
+            fullName.classList.add('fullName');
+            fullName.style.color = `${list.color}`;
+            fullName.textContent = `Name: ${list.fullName}`;
+            listItem.appendChild(fullName);
+
+            const shortName = document.createElement('p');
+            shortName.classList.add('shortName');
+            shortName.style.color = `${list.color}`;
+            shortName.textContent = `Short Name: ${list.shortName}`;
+            listItem.appendChild(shortName);
+
+            const cities = document.createElement('p');
+            cities.classList.add('cities');
+            cities.textContent = `Cities: ${list.cities.join(', ')}`;
+            listItem.appendChild(cities);
+
+            const checkBox = document.createElement('input');
+            checkBox.type = 'checkbox';
+            checkBox.addEventListener('change', () => {
+                selectedListId = list._id;
+            });
+            listItem.appendChild(checkBox);
+
+            const editButton = document.createElement('button');
+            editButton.innerText = 'Изменить';
+            editButton.addEventListener('click', () => {
+                openModalAndSendData(list);
+            });
+
+            listItem.appendChild(editButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.innerText = 'Удалить';
+            deleteButton.addEventListener('click', async () => {
+                await deleteList(list._id);
+                await renderLists();
+            });
+
+            listItem.appendChild(deleteButton);
+
+            allLists.appendChild(listItem);
+        });
+    }
+
+    async function addList(event) {
+        event.preventDefault();
+
+        const fullName = document.getElementById('fullName').value;
+        const shortName = document.getElementById('shortName').value;
+        const color = document.getElementById('color').value;
+
+        const response = await fetch('/list', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ fullName, shortName, color, cities: [] }),
+        });
+
+        const data = await response.json();
+
+        console.log(data)
+
+        await renderLists();
+    }
+
+    async function deleteList(id) {
+        const response = await fetch(`/list/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        return await response.json();
+    }
+
+    async function addCityToList(event) {
+        event.preventDefault();
+
+        const name = document.getElementById('cityName').value;
+        const description = document.getElementById('cityDescription').value;
+
+        if (selectedListId) {
+            const response = await fetch('/city', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, description }),
+            });
+
+            const data = await response.json();
+
+            console.log(data)
+
+            const listItemToUpdate = document.querySelector(`.listItem[data-id="${selectedListId}"]`);
+            const citiesElement = listItemToUpdate.querySelector('.cities');
+            let cities = citiesElement.textContent.split(',').map(city => city.trim());
+            cities.push(name);
+
+            citiesElement.textContent = `Cities: ${cities.join(', ')}`;
+
+            await updateList(selectedListId, cities);
+        }
+    }
+
+    async function updateList(id, cities = []) {
+        const fullName = document.getElementById('editFullName').value;
+        const shortName = document.getElementById('editShortName').value;
+        const color = document.getElementById('editColor').value;
+        const newData = { fullName, shortName, color, cities };
+
+        const response = await fetch(`/list/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newData),
+        });
+
+        if (response.ok) {
+            const listItemToUpdate = document.querySelector(`.listItem[data-id="${id}"]`);
+            if (listItemToUpdate) {
+                listItemToUpdate.querySelector('.fullName').textContent = `Name: ${newData.fullName}`;
+                listItemToUpdate.querySelector('.shortName').textContent = `Short Name: ${newData.shortName}`;
+                listItemToUpdate.style.color = newData.color;
+                listItemToUpdate.querySelector('.cities').textContent = `Cities: ${newData.cities.join(', ')}`;
+            }
+
+            document.getElementById('Modal').style.display = 'none';
+        } else {
+            console.error('Ошибка при обновлении списка');
+        }
+        await renderLists();
+    }
+
+
+    function openModalAndSendData(list) {
+        const editForm = document.getElementById('editForm');
+        editForm.dataset.id = list._id;
+        document.getElementById('editFullName').value = list.fullName;
+        document.getElementById('editShortName').value = list.shortName;
+        document.getElementById('editColor').value = list.color;
+        document.getElementById('Modal').style.display = 'block';
+    }
+
+    async function getCities() {
+        const response = await fetch(`/city`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        return await response.json();
+    }
+
+    async function renderCities(listId) {
+        const cities = await getCities(listId);
+        const citiesContainer = document.getElementById('citiesContainer');
+        citiesContainer.innerHTML = '';
+
+        cities.forEach(city => {
+            const cityElement = document.createElement('div');
+            cityElement.textContent = `${city.name}: ${city.description}`;
+            citiesContainer.appendChild(cityElement);
+        });
+    }
+    renderCities();
+    renderLists();
+</script>
+</body>
+</html>
